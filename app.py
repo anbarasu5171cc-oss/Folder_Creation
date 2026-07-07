@@ -11,8 +11,8 @@ import streamlit as st
 # PAGE CONFIG
 # =========================================================
 st.set_page_config(page_title="Folder Structure Generator", layout="centered")
-st.title("Folder Structure Generator")
-st.write("Upload a text file containing a folder structure. The app will create the folders and files, then provide a ZIP file for download.")
+st.title("📁 Folder Structure Generator")
+st.write("Paste your folder structure or upload a text file. The app will create the folders and files, then provide a ZIP file for download.")
 
 
 # =========================================================
@@ -154,10 +154,10 @@ def structure_to_pretty_text(structure: dict, indent: int = 0) -> str:
     for name, content in structure.items():
         prefix = " " * indent
         if isinstance(content, dict):
-            lines.append(f"{prefix}[Folder] {name}/")
+            lines.append(f"{prefix}📁 {name}/")
             lines.extend(structure_to_pretty_text(content, indent + 4).splitlines())
         else:
-            lines.append(f"{prefix}[File] {name}")
+            lines.append(f"{prefix}📄 {name}")
 
     return "\n".join(lines)
 
@@ -165,55 +165,104 @@ def structure_to_pretty_text(structure: dict, indent: int = 0) -> str:
 # =========================================================
 # UI
 # =========================================================
-uploaded_file = st.file_uploader("Upload a text file", type=["txt"])
 
-example_text = """AI_Traffic_Project/
-├── backend/
-│   ├── app.py
-│   ├── model.py
-│   └── utils.py
-├── frontend/
-├── data/
-│   ├── raw/
-│   └── processed/
-├── models/
-├── static/
-└── README.md
-"""
+# Simple example format
+example_text = """my_project/
+  src/
+    main.py
+    utils.py
+  tests/
+    test_main.py
+  data/
+    raw/
+    processed/
+  README.md
+  requirements.txt"""
 
-with st.expander("Example folder structure format"):
+with st.expander("📖 How to write folder structure", expanded=True):
+    st.markdown("""
+    **Simple format:**
+    - Use `/` at the end for folders
+    - Use indentation (spaces or tabs) for nesting
+    - Files don't need any special character
+    
+    **Example:**
+    """)
     st.code(example_text, language="text")
+
+# Input methods
+st.subheader("📝 Enter your folder structure")
+
+# Create two columns for input methods
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    # Text area for copy-paste
+    user_input = st.text_area(
+        "Paste your folder structure here",
+        height=200,
+        placeholder="my_project/\n  src/\n    main.py\n  README.md",
+        help="Copy and paste your folder structure. Use / for folders and indentation for nesting."
+    )
+
+with col2:
+    st.markdown("### OR")
+    # File upload
+    uploaded_file = st.file_uploader("Upload a .txt file", type=["txt"], label_visibility="collapsed")
+
+# Process input
+input_text = None
 
 if uploaded_file is not None:
     try:
-        file_text = uploaded_file.read().decode("utf-8")
-        items = parse_structure_text(file_text)
+        input_text = uploaded_file.read().decode("utf-8")
+        st.success("✅ File uploaded successfully!")
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+elif user_input and user_input.strip():
+    input_text = user_input
+    st.info("📝 Using pasted content")
+
+# Process and display results
+if input_text:
+    try:
+        items = parse_structure_text(input_text)
 
         if not items:
-            st.error("The uploaded file is empty or does not contain a valid folder structure.")
+            st.error("❌ The input is empty or does not contain a valid folder structure.")
         else:
             structure = build_structure(items)
             root_name = list(structure.keys())[0]
 
-            st.subheader("Parsed Structure Preview")
+            st.subheader("📋 Parsed Structure Preview")
             st.code(structure_to_pretty_text(structure), language="text")
 
-            if st.button("Create ZIP File"):
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    temp_path = Path(temp_dir)
+            st.write(f"**Root folder:** `{root_name}`")
+            st.write(f"**Total items:** {len(items)}")
 
-                    create_structure(temp_path, structure)
+            if st.button("🚀 Generate ZIP File", type="primary"):
+                with st.spinner("Creating folder structure..."):
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        temp_path = Path(temp_dir)
 
-                    root_folder_path = temp_path / root_name
-                    zip_bytes = add_folder_to_zip(root_folder_path)
+                        create_structure(temp_path, structure)
 
-                    st.success("The folder structure was created successfully.")
-                    st.download_button(
-                        label="Download ZIP File",
-                        data=zip_bytes,
-                        file_name=f"{root_name}.zip",
-                        mime="application/zip"
-                    )
+                        root_folder_path = temp_path / root_name
+                        zip_bytes = add_folder_to_zip(root_folder_path)
+
+                        st.success("✅ Folder structure created successfully!")
+                        st.download_button(
+                            label="📥 Download ZIP File",
+                            data=zip_bytes,
+                            file_name=f"{root_name}.zip",
+                            mime="application/zip",
+                            type="primary"
+                        )
 
     except Exception as e:
-        st.error(f"An error occurred: {e}")
+        st.error(f"❌ An error occurred: {e}")
+        st.exception(e)
+
+# Footer
+st.markdown("---")
+st.caption("💡 Tip: You can either paste your structure or upload a .txt file. Both work!")
